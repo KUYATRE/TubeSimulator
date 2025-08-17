@@ -1,0 +1,2 @@
+[console_scripts]
+heatersim = heatersim.app.cli:main

@@ -1,0 +1,22 @@
+# 샘플 기본 설정
+sampling:
+  dt_s: 1               # 시뮬레이션 타임스텝 [초]
+  total_padding_s: 0    # 레시피 끝난 뒤 추가 시뮬레이션 시간
+
+plant:
+  ambient_c: 25.0
+  initial_c_per_zone:   # ZONE별 초기 온도(길이가 zones와 동일하지 않으면 자동 보정)
+    - 25
+  tau_s_per_zone:       # 1차 지연 시정수 [초]
+    - 90
+  gain_c_per_unit: 1.0  # u=1일 때 온도 상승 속도 계수(단위 시간당)
+
+control:
+  hysteresis_c: 2.0     # 온/오프 히스테리시스 총폭 (±h/2)
+  min_off_s: 0          # 최소 OFF 유지시간(선택)
+  min_on_s: 0           # 최소 ON 유지시간(선택)
+
+zones: 1                # 시뮬레이션할 ZONE 수 (레시피 컬럼과 일치)
+output:
+  save_csv: true
+  save_plot: true

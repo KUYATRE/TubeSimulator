@@ -1,0 +1,12 @@
+Metadata-Version: 2.4
+Name: heatersim
+Version: 0.1.0
+Summary: Heater output mask simulator from recipe CSV
+Author: Your Name
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: pandas>=2.2
+Requires-Dist: numpy>=1.26
+Requires-Dist: pyyaml>=6.0
+Requires-Dist: click>=8.1
+Requires-Dist: matplotlib>=3.8

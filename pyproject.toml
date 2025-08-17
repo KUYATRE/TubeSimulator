@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "heatersim"
+version = "0.1.0"
+description = "Heater output mask simulator from recipe CSV"
+requires-python = ">=3.10"
+authors = [{ name = "Your Name" }]
+readme = "README.md"
+dependencies = [
+  "pandas>=2.2",
+  "numpy>=1.26",
+  "pyyaml>=6.0",
+  "click>=8.1",
+  "matplotlib>=3.8"
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[project.scripts]
+heatersim = "heatersim.app.cli:main"
