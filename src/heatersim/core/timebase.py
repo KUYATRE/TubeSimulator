@@ -5,7 +5,7 @@ from heatersim.core.models import Recipe
 
 def expand_recipe_to_timeline(recipe: Recipe, dt_s: float, total_padding_s: int = 0) -> pd.DataFrame:
     """
-    각 스텝을 1초로 전개. 반환 컬럼: ["t_s", "MV_Z1"]
+    각 스텝을 1초로 전개. 반환 컬럼: ["t_s", "MV_Z5"]
     (SP 관련 컬럼은 생성하지 않음)
     """
     total_s = int(np.ceil(recipe.total_duration_s + total_padding_s))
@@ -23,5 +23,5 @@ def expand_recipe_to_timeline(recipe: Recipe, dt_s: float, total_padding_s: int 
         mv[cursor:end] = val
         cursor = end
 
-    df = pd.DataFrame({"t_s": t, "MV_Z1": mv.astype(int)})
+    df = pd.DataFrame({"t_s": t, "MV_Z5": mv.astype(int)})
     return df

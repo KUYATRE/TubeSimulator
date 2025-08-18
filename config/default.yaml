@@ -16,7 +16,7 @@ control:
   min_off_s: 0          # 최소 OFF 유지시간(선택)
   min_on_s: 0           # 최소 ON 유지시간(선택)
 
-zones: 1                # 시뮬레이션할 ZONE 수 (레시피 컬럼과 일치)
+zones: 5                # 시뮬레이션할 ZONE 수 (레시피 컬럼과 일치)
 output:
   save_csv: true
   save_plot: true

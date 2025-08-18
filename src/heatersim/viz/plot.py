@@ -11,22 +11,23 @@ def plot_zone(df: pd.DataFrame, zone: int, out_dir: str | None = None, fname_pre
     fig = plt.figure(figsize=(10, 5))
     ax1 = fig.add_subplot(2, 1, 1)
     if mv is not None:
-        ax1.step(t, mv, where="post", label="MV_Z1")
+        ax1.step(t, mv, where="post", label=f"MV_Z{zone}")
     ax1.set_title(f"Zone {zone} MV")
     ax1.set_xlabel("Time [s]")
-    ax1.set_ylabel("0/1 or value")
+    ax1.set_ylabel("0/1")
     ax1.legend()
 
     ax2 = fig.add_subplot(2, 1, 2)
     if out_mask is not None:
-        ax2.step(t, out_mask, where="post", label="OUT (0/1)")
-    ax2.set_title(f"Zone {zone} Heater Output Mask")
+        ax2.step(t, out_mask, where="post", label=f"OUT_Z{zone}")
+    ax2.set_title(f"Zone {zone} Heater Output")
     ax2.set_xlabel("Time [s]")
     ax2.set_ylabel("0/1")
     ax2.set_ylim(-0.1, 1.1)
     ax2.legend()
 
     fig.tight_layout()
+
     if out_dir:
         os.makedirs(out_dir, exist_ok=True)
         path = os.path.join(out_dir, f"{fname_prefix}_Z{zone}.png")

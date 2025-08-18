@@ -10,6 +10,10 @@ src/heatersim/app/cli.py
 src/heatersim/core/models.py
 src/heatersim/core/simulator.py
 src/heatersim/core/timebase.py
+src/heatersim/facility/apply_mask.py
+src/heatersim/facility/from_z5.py
+src/heatersim/facility/models.py
+src/heatersim/facility/scheduler.py
 src/heatersim/io/logging_config.py
 src/heatersim/io/outputs.py
 src/heatersim/io/recipe_csv.py

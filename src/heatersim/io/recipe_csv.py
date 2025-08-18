@@ -5,11 +5,11 @@ from heatersim.core.models import Recipe, RecipeStep
 
 # ZONE1 MV 컬럼 후보 패턴 (필요시 추가)
 MV_PATS = [
-    r"^ZONE\s*1\s*\(\s*MV\s*\)$",   # "ZONE1 (MV)"
-    r"^ZONE1\(\s*MV\s*\)$",         # "ZONE1(MV)"
-    r"^ZONE1[_\s-]*MV$",            # "ZONE1_MV", "ZONE1 MV"
-    r"^MV[_\s-]*Z?1$",              # "MV_Z1", "MV 1"
-    r".*\(MV\).*1.*",               # 임의 "(MV)" + '1' 포함
+    r"^ZONE\s*5\s*\(\s*MV\s*\)$",   # "ZONE5 (MV)"
+    r"^ZONE5\(\s*MV\s*\)$",         # "ZONE5(MV)"
+    r"^ZONE5[_\s-]*MV$",            # "ZONE5_MV", "ZONE5 MV"
+    r"^MV[_\s-]*Z?5$",              # "MV_Z5", "MV 5"
+    r".*\(MV\).*5.*",               # 임의 "(MV)" + '5' 포함
 ]
 
 def _find_mv_col(df: pd.DataFrame) -> str | None:
@@ -18,7 +18,7 @@ def _find_mv_col(df: pd.DataFrame) -> str | None:
         for c in df.columns:
             if rx.search(str(c)):
                 return c
-    # 최후의 보루: MV가 붙은 컬럼이 하나뿐이라면 허용
+    # MV가 붙은 컬럼이 하나뿐이라면 허용
     mv_like = [c for c in df.columns if "(MV)" in str(c)]
     if len(mv_like) == 1:
         return mv_like[0]
