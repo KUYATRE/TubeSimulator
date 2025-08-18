@@ -30,7 +30,7 @@ def main():
 
 def simulate(recipe_path: str, config_path: str, outdir: str, plot: bool, log_level: str):
     setup_logging(getattr(logging, log_level.upper(), logging.INFO))
-    logger = logging.getLogger("heatersim")
+    logger = logging.getLogger("TubeSimul")
 
     # 설정 로드
     with open(config_path, "r", encoding="utf-8") as f:

@@ -1,18 +1,27 @@
-# 모든 시간은 초 단위, 각 행=1초 가정과 호환
+# 모든 시간은 초 단위, 각 행=1초 가정
+version: 1
+
 resources:
-  conveyor: 1  # 동시 처리 수
+  conveyor: 1         # 동시 처리 수
   lifter: 1
 
 steps:
-  conveyor_in_s: 20     # 컨베이어 반입
-  lifter_in_s: 10       # 리프터로 튜브 안착
-  process_s: 1800       # 공정 진행(기본값) — 필요시 CLI에서 오버라이드
-  lifter_out_s: 10      # 언로딩(리프터)
+  conveyor_in_s: 20   # 컨베이어 반입
+  lifter_in_s: 10     # 리프터로 튜브 안착
+  process_s: 1800     # 공정 진행(기본값) — 필요시 CLI/코드에서 오버라이드 가능
+  lifter_out_s: 10    # 언로딩(리프터)
   conveyor_to_cool_s: 15
-  cooling_store_s: 5
+  cooling_store_s: 5  # 쿨링 스토어 안착
 
 tubes:
   count: 6
 
 power:
-  per_tube_w: 2000      # 히터 1튜브 정격(W), 필요시 리스트로 [T1..T6]
+  # 단일 값 또는 리스트 허용: 2000 혹은 [2000, 2000, 2000, 2000, 2000, 2000]
+  per_tube_w: 2000
+
+facility:
+  # build_facility_from_z5용 앞/뒤 패딩 및 반복 횟수
+  pre_s: 1800
+  post_s: 1800
+  repeat_n: 10

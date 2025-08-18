@@ -1,6 +1,7 @@
 # heater_lamp_timeline.py (UI + Simulate integrated)
 # PySide6 UI: drag timeline to blink red lamps for 6 heaters based on CSV (t_s, MV_H1..MV_H6)
-# + Facility-from-Z5 생성 버튼 + Recipe 시뮬레이트/로그열기 버튼 (heatersim_ui_bridge 사용)
+# + Facility-from-Z5 생성 버튼 + Recipe 시뮬레이트 버튼 (heatersim_ui_bridge 사용)
+# + 실행 경로 기준 ./config/{facility.yaml|default.yaml} 자동 활용 (PyInstaller exe/일반 python 모두 대응)
 
 from __future__ import annotations
 import sys
@@ -8,6 +9,7 @@ import os
 from typing import List, Optional
 
 import pandas as pd
+import yaml
 from PySide6.QtCore import Qt, QTimer, QSize, QThreadPool
 from PySide6.QtGui import QColor, QPainter, QPen, QBrush, QAction
 from PySide6.QtWidgets import (
@@ -18,12 +20,62 @@ from PySide6.QtWidgets import (
 # UI 브리지(동기/비동기 래퍼)
 _HAS_BRIDGE = True
 try:
-    from heatersim_ui_bridge import (
+    from src.heatersim.viz.heatersim_ui_bridge import (
         FacilityParams, FacilityFromZ5Worker,
         SimulateParams, SimulateWorker,
     )
 except Exception:
     _HAS_BRIDGE = False
+
+
+# ===============================================================
+# Config 경로/값 유틸: exe/py 모두에서 ./config/{facility.yaml|default.yaml} 탐색
+# ===============================================================
+
+def _candidate_base_dirs() -> List[str]:
+    dirs = [os.getcwd()]
+    # PyInstaller 실행 파일 기준
+    if getattr(sys, "frozen", False):
+        dirs.append(os.path.dirname(sys.executable))
+    # 스크립트 기준
+    try:
+        dirs.append(os.path.dirname(os.path.abspath(sys.argv[0])))
+    except Exception:
+        pass
+    # 중복 제거 (순서 유지)
+    seen = set(); uniq = []
+    for d in dirs:
+        if d not in seen:
+            seen.add(d); uniq.append(d)
+    return uniq
+
+
+def resolve_config_path(*names: str) -> Optional[str]:
+    """실행 경로 후보들에서 ./config/<name>를 순서대로 탐색해 최초 발견 경로 반환."""
+    for base in _candidate_base_dirs():
+        for name in names:
+            p = os.path.join(base, "config", name)
+            if os.path.exists(p):
+                return p
+    return None
+
+
+def read_facility_yaml(cfg_path: str) -> tuple[int, int, int, dict]:
+    """facility.yaml에서 pre_s/post_s/repeat_n을 읽고 steps 기반 기본값 보정.
+    - 우선순위: facility.pre_s/post_s/repeat_n → steps 기반(pre, post)
+    """
+    with open(cfg_path, "r", encoding="utf-8") as f:
+        cfg = yaml.safe_load(f) or {}
+
+    steps = cfg.get("steps", {})
+    default_pre = int(steps.get("conveyor_in_s", 0)) + int(steps.get("lifter_in_s", 0))
+    default_post = int(steps.get("cooling_store_s", 0))
+
+    fac = cfg.get("facility", {})
+    pre = int(fac.get("pre_s", default_pre))
+    post = int(fac.get("post_s", default_post))
+    repeat = int(fac.get("repeat_n", 10))
+    return pre, post, repeat, cfg
 
 
 class LampWidget(QWidget):
@@ -112,7 +164,7 @@ class MainWindow(QMainWindow):
     def __init__(self, csv_path: Optional[str] = None):
         super().__init__()
         self.setWindowTitle("Heater Lamp Timeline")
-        self.resize(1200, 460)
+        self.resize(1200, 480)
 
         # Data members
         self.df: Optional[pd.DataFrame] = None
@@ -129,17 +181,13 @@ class MainWindow(QMainWindow):
         top.addWidget(self.path_label, 1)
         top.addWidget(btn_open)
 
-        # Facility-from-Z5 버튼
-        self.btn_facility = QPushButton("Facility 생성(Z5→H1..H6)")
+        # Facility-from-Z5 버튼 (facility.yaml만 사용)
+        self.btn_facility = QPushButton("All heater 시뮬레이트")
         self.btn_facility.setEnabled(_HAS_BRIDGE)
         self.btn_facility.clicked.connect(self.on_click_facility)
         top.addWidget(self.btn_facility)
 
-        # Recipe 로그/시뮬레이트 버튼
-        self.btn_open_recipe_log = QPushButton("Recipe 로그 열기…")
-        self.btn_open_recipe_log.clicked.connect(self.on_open_recipe_log)
-        top.addWidget(self.btn_open_recipe_log)
-
+        # Recipe 시뮬레이트 버튼 (default.yaml만 사용)
         self.btn_simulate = QPushButton("Recipe 시뮬레이트…")
         self.btn_simulate.setEnabled(_HAS_BRIDGE)
         self.btn_simulate.clicked.connect(self.on_click_simulate)
@@ -278,13 +326,7 @@ class MainWindow(QMainWindow):
         if path:
             self.load_csv(path)
 
-    def on_open_recipe_log(self):
-        """Recipe 시뮬 결과 CSV 등(= MV_H1..MV_H6를 갖춘 로그)을 직접 선택해서 로드."""
-        path, _ = QFileDialog.getOpenFileName(self, "Recipe 로그 CSV 열기", "data/outputs", "CSV Files (*.csv)")
-        if path:
-            self.load_csv(path)
-
-    # --- Facility-from-Z5: run via bridge worker and load result ---
+    # --- Facility-from-Z5: facility.yaml만 사용 ---
     def on_click_facility(self):
         if not _HAS_BRIDGE:
             QMessageBox.warning(self, "기능 비활성화", "heatersim_ui_bridge 모듈을 찾을 수 없습니다.")
@@ -293,10 +335,26 @@ class MainWindow(QMainWindow):
         in_csv, _ = QFileDialog.getOpenFileName(self, "Z5 기반 원본 CSV 선택", "", "CSV Files (*.csv)")
         if not in_csv:
             return
-        cfg_path, _ = QFileDialog.getOpenFileName(self, "facility.yaml 선택", "config", "YAML (*.yaml *.yml)")
+
+        # facility.yaml만 자동 탐색 (없으면 수동 선택)
+        cfg_path = resolve_config_path("facility.yaml")
         if not cfg_path:
+            cfg_path, _ = QFileDialog.getOpenFileName(self, "facility.yaml 선택", "config", "YAML (*.yaml *.yml)")
+            if not cfg_path:
+                QMessageBox.warning(self, "중단", "facility.yaml을 찾을 수 없습니다.")
+                return
+
+        try:
+            pre_s, post_s, repeat_n, _cfg = read_facility_yaml(cfg_path)
+        except Exception as e:
+            QMessageBox.critical(self, "설정 오류", f"YAML 파싱 실패: {e}")
             return
-        out_csv, _ = QFileDialog.getSaveFileName(self, "생성될 facility CSV 저장 위치", os.path.join("data", "outputs", "facility_from_z5.csv"), "CSV Files (*.csv)")
+
+        out_csv, _ = QFileDialog.getSaveFileName(
+            self, "생성될 facility CSV 저장 위치",
+            os.path.join("data", "outputs", "heater_simulation_model.csv"),
+            "CSV Files (*.csv)"
+        )
         if not out_csv:
             return
 
@@ -304,27 +362,27 @@ class MainWindow(QMainWindow):
             in_csv=in_csv,
             facility_cfg=cfg_path,
             out_csv=out_csv,
-            pre_s=600,
-            post_s=600,
+            pre_s=pre_s,
+            post_s=post_s,
             multi_tube_running=True,
-            repeat_n=10,
+            repeat_n=repeat_n,
         )
 
         worker = FacilityFromZ5Worker(params)
         worker.signals.message.connect(lambda m: self.status_label.setText(m))
         worker.signals.error.connect(lambda e: QMessageBox.critical(self, "생성 오류", e))
         worker.signals.finished.connect(lambda d: self._on_facility_done(d.get("out_csv")))
-        self.status_label.setText("FacilityFromZ5: 시작")
+        self.status_label.setText(f"Heater simulation file 생성: 시작 (cfg={os.path.basename(cfg_path)}, pre={pre_s}, post={post_s}, rep={repeat_n})")
         self.pool.start(worker)
 
     def _on_facility_done(self, out_csv: Optional[str]):
         if not out_csv:
-            self.status_label.setText("FacilityFromZ5: 실패")
+            self.status_label.setText("Heater simulation file 생성: 실패")
             return
         self.status_label.setText(f"생성 완료: {os.path.basename(out_csv)}")
         self.load_csv(out_csv)
 
-    # --- Simulate: run via bridge worker and load result ---
+    # --- Simulate: default.yaml만 사용 ---
     def on_click_simulate(self):
         if not _HAS_BRIDGE:
             QMessageBox.warning(self, "기능 비활성화", "heatersim_ui_bridge 모듈을 찾을 수 없습니다.")
@@ -333,9 +391,12 @@ class MainWindow(QMainWindow):
         recipe_path, _ = QFileDialog.getOpenFileName(self, "Recipe CSV 선택", "data/recipes", "CSV Files (*.csv)")
         if not recipe_path:
             return
-        config_path, _ = QFileDialog.getOpenFileName(self, "config yaml 선택", "config", "YAML (*.yaml *.yml)")
+        # default.yaml만 자동 탐색 (없으면 수동)
+        config_path = resolve_config_path("default.yaml")
         if not config_path:
-            return
+            config_path, _ = QFileDialog.getOpenFileName(self, "default.yaml 선택", "config", "YAML (*.yaml *.yml)")
+            if not config_path:
+                return
         outdir = QFileDialog.getExistingDirectory(self, "출력 디렉터리 선택", "data/outputs")
         if not outdir:
             return
@@ -346,7 +407,7 @@ class MainWindow(QMainWindow):
         worker.signals.message.connect(lambda m: self.status_label.setText(m))
         worker.signals.error.connect(lambda e: QMessageBox.critical(self, "시뮬 오류", e))
         worker.signals.finished.connect(self._on_simulate_done)
-        self.status_label.setText("Simulate: 시작")
+        self.status_label.setText(f"Simulate: 시작 (cfg={os.path.basename(config_path)})")
         self.pool.start(worker)
 
     def _on_simulate_done(self, payload: dict):

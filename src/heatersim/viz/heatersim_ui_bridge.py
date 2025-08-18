@@ -40,7 +40,7 @@ import os
 import logging
 import yaml
 
-# --- heatersim 내부 모듈 ---
+# --- TubeSimul 내부 모듈 ---
 from heatersim.io.logging_config import setup_logging
 from heatersim.io.recipe_csv import load_recipe_csv
 from heatersim.core.timebase import expand_recipe_to_timeline
@@ -87,7 +87,7 @@ def simulate_ui(recipe_path: str, config_path: str, outdir: str,
         }
     """
     setup_logging(getattr(logging, log_level.upper(), logging.INFO))
-    logger = logging.getLogger("heatersim")
+    logger = logging.getLogger("TubeSimul")
 
     with open(config_path, "r", encoding="utf-8") as f:
         cfg_yaml = yaml.safe_load(f)
@@ -218,7 +218,7 @@ if _HAS_QT:
 
         def run(self):
             try:
-                self.signals.message.emit("FacilityFromZ5: 시작")
+                self.signals.message.emit("Heater simulation file 생성: 시작")
                 out_path = facility_from_z5_ui(
                     in_csv=self.params.in_csv,
                     facility_cfg=self.params.facility_cfg,
@@ -228,7 +228,7 @@ if _HAS_QT:
                     multi_tube_running=self.params.multi_tube_running,
                     repeat_n=self.params.repeat_n,
                 )
-                self.signals.message.emit("FacilityFromZ5: 완료")
+                self.signals.message.emit("Heater simulation file 생성: 완료")
                 self.signals.finished.emit({"out_csv": out_path})
             except Exception as e:
                 self.signals.error.emit(str(e))
