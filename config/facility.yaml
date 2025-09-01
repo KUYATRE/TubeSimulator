@@ -21,7 +21,6 @@ power:
   per_tube_w: 2000
 
 facility:
-  # build_facility_from_z5용 앞/뒤 패딩 및 반복 횟수
-  pre_s: 1800
-  post_s: 1800
+  pre_s: 5400
+  post_s: 5400
   repeat_n: 10

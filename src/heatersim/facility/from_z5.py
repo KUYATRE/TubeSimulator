@@ -43,14 +43,15 @@ def build_facility_from_z5(
     post_pad = np.zeros(int(post_s), dtype=int)
 
     # H1 base segment & repeated timeline
-    mv_h1_seg = np.concatenate([pre_pad, mv5, post_pad])
+    mv_h1_seg = np.concatenate([pre_pad, mv5])
+    mv_repeat = np.concatenate([post_pad, mv5])
     seg_len = len(mv_h1_seg)
 
     rep = int(repeat_n) if repeat_n is not None else 1
-    total_len = seg_len * rep
+    total_len = seg_len + len(mv_repeat) * (rep-1)
 
     t_s_full = np.arange(total_len, dtype=int)
-    mv_h1_full = np.tile(mv_h1_seg, rep)
+    mv_h1_full = np.concatenate([mv_h1_seg, np.tile(mv_repeat, rep-1)])
 
     data = {
         "t_s": t_s_full,
@@ -61,13 +62,13 @@ def build_facility_from_z5(
         for i in range(2, 7):
             # 1) 히터별 패딩 세그먼트 (첫 구간)
             pre_pad_hi = np.zeros(int(pre_s) * i, dtype=int)
-            mv_hi_first = np.concatenate([pre_pad_hi, mv5, post_pad])
+            mv_hi_first = np.concatenate([pre_pad_hi, mv5])
 
             # 2) 전체 반복 구성: 첫 구간은 mv_hi_first, 이후는 mv_h1_seg
             if rep <= 1:
                 mv_hi_full = mv_hi_first
             else:
-                tail_parts = [mv_h1_seg] * (rep - 1)
+                tail_parts = [mv_repeat] * (rep - 1)
                 mv_hi_full = np.concatenate([mv_hi_first] + tail_parts)
 
             # 3) 길이 보정은 여기서 **최종 길이에 대해 한 번만** 수행

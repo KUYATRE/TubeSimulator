@@ -6,7 +6,8 @@
 from __future__ import annotations
 import sys
 import os
-from typing import List, Optional
+import json
+from typing import List, Optional, Union
 
 import pandas as pd
 import yaml
@@ -14,8 +15,9 @@ from PySide6.QtCore import Qt, QTimer, QSize, QThreadPool
 from PySide6.QtGui import QColor, QPainter, QPen, QBrush, QAction
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QLabel, QVBoxLayout, QHBoxLayout,
-    QPushButton, QFileDialog, QSlider, QMessageBox, QFrame
+    QPushButton, QFileDialog, QSlider, QMessageBox, QFrame, QTableWidget, QTableWidgetItem
 )
+from heatersim.facility.power_calc import sort_dataframe_by_column, sumarize_mv_activity, load_heater_config, calc_avg
 
 # UI 브리지(동기/비동기 래퍼)
 _HAS_BRIDGE = True
@@ -164,7 +166,7 @@ class MainWindow(QMainWindow):
     def __init__(self, csv_path: Optional[str] = None):
         super().__init__()
         self.setWindowTitle("Heater Lamp Timeline")
-        self.resize(1200, 480)
+        self.resize(1200, 560)
 
         # Data members
         self.df: Optional[pd.DataFrame] = None
@@ -200,6 +202,19 @@ class MainWindow(QMainWindow):
         # Panel
         self.panel = HeaterLampPanel(); vbox.addWidget(self.panel, 1)
 
+        # --- 집계 테이블 (숨김 상태로 시작) ---
+        self.table_widget = QTableWidget()
+        self.table_widget.setColumnCount(0)
+        self.table_widget.setRowCount(0)
+        self.table_widget.setVisible(False)   # CSV 불러오기 전에는 숨김
+        vbox.addWidget(self.table_widget)
+
+        # --- 평균 전력 표시 라벨 ---
+        self.avg_power_label = QLabel("평균 전력: -")
+        self.avg_power_label.setAlignment(Qt.AlignRight)
+        self.avg_power_label.setStyleSheet("color: #eaeaf0; background:#1e1f24; padding:6px; border-radius:8px;")
+        vbox.addWidget(self.avg_power_label)
+
         # Timeline
         line = QFrame(); line.setFrameShape(QFrame.HLine); line.setStyleSheet("color: #333")
         vbox.addWidget(line)
@@ -231,6 +246,83 @@ class MainWindow(QMainWindow):
         if csv_path and os.path.exists(csv_path):
             self.load_csv(csv_path)
 
+    # --- helpers ---
+    def _format_avg_power(self, avg_heater_power: Union[pd.Series, pd.DataFrame, dict, float, int]) -> str:
+        """avg_heater_power를 보기 좋은 문자열로 포맷.
+        - dict/Series: 각 히터 값과 합계를 보여줌
+        - DataFrame: 숫자 컬럼의 첫 행 사용 또는 'total'/'sum' 칼럼 우선
+        - 스칼라: 단일 값으로 간주
+        """
+        try:
+            if isinstance(avg_heater_power, (int, float)):
+                return f"평균 전력: {avg_heater_power:.2f} KW"
+
+            if isinstance(avg_heater_power, dict):
+                items = avg_heater_power
+            elif isinstance(avg_heater_power, pd.Series):
+                items = avg_heater_power.to_dict()
+            elif isinstance(avg_heater_power, pd.DataFrame):
+                df = avg_heater_power.copy()
+                # 'total'/'sum' 우선 노출
+                prefer_cols = [c for c in df.columns if str(c).lower() in ("total", "sum")]
+                if prefer_cols:
+                    total_val = df.iloc[0][prefer_cols[0]]
+                else:
+                    # 숫자 컬럼의 평균을 총합처럼 사용
+                    num_cols = df.select_dtypes(include="number").columns
+                    total_val = float(df[num_cols].iloc[0].sum()) if len(df) else float('nan')
+                # 히터별 컬럼 추정(H1~H6)
+                items = {}
+                for i in range(1, 7):
+                    for c in df.columns:
+                        if str(c).upper() in (f"H{i}", f"MV_H{i}", f"HEATER{i}"):
+                            items[f"H{i}"] = float(df.iloc[0][c])
+                            break
+                items["Total"] = float(total_val)
+            else:
+                # 알 수 없는 타입 → 문자열화
+                return f"평균 전력: {avg_heater_power}"
+
+            # 보기 좋은 한 줄 요약
+            parts = []
+            total_key = None
+            for k in list(items.keys()):
+                if str(k).lower() in ("total", "sum"):
+                    total_key = k
+            for i in range(1, 7):
+                key = f"H{i}"
+                if key in items:
+                    try:
+                        parts.append(f"{key}: {float(items[key]):.2f}W")
+                    except Exception:
+                        parts.append(f"{key}: {items[key]}")
+            if total_key is not None:
+                try:
+                    parts.append(f"Total: {float(items[total_key]):.2f}W")
+                except Exception:
+                    parts.append(f"Total: {items[total_key]}")
+            if not parts and items:
+                # 키가 예측 불가한 경우 모든 항목 노출
+                parts = [f"{k}: {v}" for k, v in items.items()]
+            return " | ".join(parts) if parts else "평균 전력: -"
+        except Exception:
+            return "평균 전력: (표시 실패)"
+
+    def _set_avg_power_ui(self, avg_heater_power: Union[pd.Series, pd.DataFrame, dict, float, int]):
+        text = self._format_avg_power(avg_heater_power)
+        self.avg_power_label.setText(text)
+        # 툴팁에 원자료 JSON 저장 (디버깅 용이)
+        try:
+            if isinstance(avg_heater_power, pd.DataFrame):
+                payload = avg_heater_power.to_dict(orient="records")
+            elif isinstance(avg_heater_power, pd.Series):
+                payload = avg_heater_power.to_dict()
+            else:
+                payload = avg_heater_power
+            self.avg_power_label.setToolTip(json.dumps(payload, ensure_ascii=False, indent=2))
+        except Exception:
+            self.avg_power_label.setToolTip(str(avg_heater_power))
+
     # --- Data loading ---
     def load_csv(self, path: str):
         try:
@@ -255,6 +347,29 @@ class MainWindow(QMainWindow):
 
         # Initial update
         self.update_lamps(index=0, dragging=False)
+
+        # Power consumption calculate
+        sorted_df = sort_dataframe_by_column(self.df)
+        sum_df = sumarize_mv_activity(sorted_df)
+
+        # 집계 결과를 UI 테이블에 표시
+        self.show_dataframe(sum_df)
+
+        cfg_path = resolve_config_path("heater_config.yaml")
+        if not cfg_path:
+            cfg_path, _ = QFileDialog.getOpenFileName(self, "heater_config.yaml 선택", "config", "YAML (*.yaml *.yml)")
+            if not cfg_path:
+                QMessageBox.warning(self, "중단", "heater_config.yaml을 찾을 수 없습니다.")
+                return
+
+        heater_cfg = load_heater_config(cfg_path)
+        heater_power = heater_cfg["simulation"]["power"]
+        print(heater_power)
+
+        # 평균 전력 계산 및 UI 표시
+        avg_heater_power = calc_avg(sum_df, heater_power)
+        print(avg_heater_power)
+        self._set_avg_power_ui(avg_heater_power)
 
     # --- Slider handlers ---
     def on_slider_changed(self, value: int):
@@ -417,6 +532,25 @@ class MainWindow(QMainWindow):
             self.load_csv(csv_path)
         else:
             QMessageBox.information(self, "완료", "시뮬은 완료했지만 CSV 저장 설정(save_csv)이 비활성화되어 있습니다.")
+
+    def show_dataframe(self, df: pd.DataFrame):
+        """Pandas DataFrame을 QTableWidget에 표시"""
+        if df is None or df.empty:
+            self.table_widget.setVisible(False)
+            return
+
+        self.table_widget.setRowCount(len(df))
+        self.table_widget.setColumnCount(len(df.columns))
+        self.table_widget.setHorizontalHeaderLabels(df.columns.astype(str).tolist())
+
+        for i in range(len(df)):
+            for j, col in enumerate(df.columns):
+                val = str(df.iloc[i, j])
+                self.table_widget.setItem(i, j, QTableWidgetItem(val))
+
+        self.table_widget.resizeColumnsToContents()
+        self.table_widget.setVisible(True)
+
 
 
 def run(csv_path: Optional[str] = None):
